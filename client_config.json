@@ -1,0 +1,33 @@
+[
+    {
+        "id": "client1",
+        "password": "securePassword1",
+        "server": {
+            "ip": "localhost",
+            "port": "8080"
+        },
+        "actions": { 
+            "delay": "2",
+            "steps": [
+                "INCREASE 5",
+                "DECREASE 3"
+            ]
+        }
+    },
+    {
+        "id": "client2",
+        "password": "securePassword2",
+        "server": {
+            "ip": "localhost",
+            "port": "8080"
+        },
+        "actions": { 
+            "delay": "1",
+            "steps": [
+                "INCREASE 10",
+                "DECREASE 2"
+            ]
+        }
+    }
+]
+
