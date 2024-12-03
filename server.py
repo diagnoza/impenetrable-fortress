@@ -7,6 +7,8 @@ logging.basicConfig(
 )
 
 class ClientHandler(threading.Thread):
+    IDLE_TIMEOUT = 300  # Idle timeout in seconds (e.g., 5 minutes)
+
     def __init__(self, client_socket, address, server):
         super().__init__()
         self.client_socket = client_socket
@@ -14,6 +16,7 @@ class ClientHandler(threading.Thread):
         self.server = server
         self.client_id = None
         self.password = None
+        self.client_socket.settimeout(self.IDLE_TIMEOUT)
 
     def authenticate(self, data):
         self.client_id = data.get("id")
@@ -46,18 +49,22 @@ class ClientHandler(threading.Thread):
             self.server.users[self.client_id]['connections'] += 1
             logging.info(f"User {self.client_id} connected from {self.address}")
             self.client_socket.send(b"Registration Successful")
-
             while True:
-                action_data = self.client_socket.recv(1024).decode()
-                if not action_data:
-                    break
-                actions = json.loads(action_data).get("actions", {}).get("steps", [])
-                delay = int(json.loads(action_data).get("actions", {}).get("delay", 1))
-                for action in actions:
-                    threading.Event().wait(delay)
-                    self.process_action(action)
+                try:
 
-                self.client_socket.send(b"Actions Processed")
+                    action_data = self.client_socket.recv(1024).decode()
+                    if not action_data:
+                        break
+                    actions = json.loads(action_data).get("actions", {}).get("steps", [])
+                    delay = int(json.loads(action_data).get("actions", {}).get("delay", 1))
+                    for action in actions:
+                        threading.Event().wait(delay)
+                        self.process_action(action)
+
+                    self.client_socket.send(b"Actions Processed")
+                except socket.timeout:
+                    logging.info(f"Client {self.client_id} disconnected due to inactivity.")
+                    break
 
         except Exception as e:
             logging.error(f"Error handling client {self.address}: {e}")
@@ -83,12 +90,15 @@ class ClientHandler(threading.Thread):
             logging.error(f"Invalid action format received from {self.client_id}: {action}")
 
 class Server:
+    MAX_CONNECTIONS = 3
     def __init__(self, host="localhost", port=8080):
         self.host = host
         self.port = port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.clients = {}
         self.users = {}
+        self.active_connections = 0  # Track the number of active connections
+        self.lock = threading.Lock()
 
     def start(self):
         self.server_socket.bind((self.host, self.port))
@@ -97,6 +107,13 @@ class Server:
 
         while True:
             client_socket, address = self.server_socket.accept()
+            with self.lock:
+                if self.active_connections >= self.MAX_CONNECTIONS:
+                    logging.warning(f"Connection attempt from {address} rejected: server at capacity.")
+                    client_socket.send(b"Server is full, try again later.")
+                    client_socket.close()
+                    continue
+                self.active_connections += 1
             logging.info(f"Accepted connection from {address}")
             client_handler = ClientHandler(client_socket, address, self)
             client_handler.start()
@@ -113,6 +130,10 @@ class Server:
         if client_id in self.users and self.users[client_id]['connections'] == 0:
             logging.info(f"Removing data for user {client_id} as no active connections remain")
             del self.users[client_id]
+
+    def decrement_connection_count(self):
+        with self.lock:
+            self.active_connections -= 1
 
 if __name__ == "__main__":
     server = Server()

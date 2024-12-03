@@ -7,7 +7,7 @@
             "port": "8080"
         },
         "actions": { 
-            "delay": "2",
+            "delay": "20",
             "steps": [
                 "INCREASE 5",
                 "DECREASE 3"
