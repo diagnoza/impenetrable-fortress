@@ -1,5 +1,8 @@
 import socket, threading, json, logging
 
+from fontTools.misc.eexec import encrypt, decrypt
+
+
 logging.basicConfig(
     filename='server_log.txt',
     level=logging.INFO,
@@ -23,11 +26,11 @@ class ClientHandler(threading.Thread):
         self.password = data.get("password")
 
         if self.client_id in self.server.users:
-            if self.server.users[self.client_id]['password'] != self.password:
+            if self.server.users[self.client_id]['password'] != decrypt(self.password,"DKE"):
                 return False, "Incorrect password for the provided ID"
         else:
             self.server.users[self.client_id] = {
-                'password': self.password,
+                'password': encrypt(self.password,"DKE"),
                 'counter': 0,
                 'connections': 0
             }
@@ -83,7 +86,8 @@ class ClientHandler(threading.Thread):
                 self.server.users[self.client_id]['counter'] += amount
             elif action_type == "DECREASE":
                 self.server.users[self.client_id]['counter'] -= amount
-
+            else:
+                raise ValueError
             new_value = self.server.users[self.client_id]['counter']
             logging.info(f"Client {self.client_id} - Action: {action_type} {amount}, New Counter: {new_value}")
         except ValueError:
@@ -126,6 +130,7 @@ class Server:
         if client_id in self.clients:
             del self.clients[client_id]
             logging.info(f"Client {client_id} connection closed")
+            self.decrement_connection_count()
 
         if client_id in self.users and self.users[client_id]['connections'] == 0:
             logging.info(f"Removing data for user {client_id} as no active connections remain")

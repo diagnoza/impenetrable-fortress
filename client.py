@@ -45,6 +45,7 @@ class Client:
                     "steps": self.actions
                 }
             })
+
             self.client_socket.send(action_data.encode())
             response = self.client_socket.recv(1024).decode()
             print("Server response:", response)
